@@ -6,10 +6,13 @@ from urllib.parse import quote_plus
 try:
     import requests
     from bs4 import BeautifulSoup
+    from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QLineEdit, QPushButton, QLabel, QTextEdit
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtGui import QClipboard
 except ImportError:
     print("Error: Required libraries are not installed.")
     print("Please install the required libraries using the following command:")
-    print("pip install requests beautifulsoup4")
+    print("pip install requests beautifulsoup4 PyQt6")
     sys.exit(1)
 
 def search_imdb_api(query, year=None):
@@ -99,16 +102,80 @@ def search_imdb(query):
     print("No results found.")
     return None
 
+class IMDbSearchGUI(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("IMDb Search")
+        self.setGeometry(100, 100, 400, 300)
+
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+
+        layout = QVBoxLayout()
+
+        input_layout = QHBoxLayout()
+        self.search_input = QLineEdit()
+        self.search_input.returnPressed.connect(self.perform_search)  # Connect Enter key to search
+        self.search_button = QPushButton("Search")
+        self.search_button.clicked.connect(self.perform_search)
+        input_layout.addWidget(self.search_input)
+        input_layout.addWidget(self.search_button)
+
+        self.result_display = QTextEdit()
+        self.result_display.setReadOnly(True)
+
+        layout.addLayout(input_layout)
+        layout.addWidget(self.result_display)
+
+        central_widget.setLayout(layout)
+
+    def perform_search(self):
+        query = self.search_input.text()
+        self.result_display.clear()
+        self.result_display.append(f"Searching for: {query}")
+        
+        imdb_id = search_imdb(query)
+        
+        if imdb_id:
+            self.result_display.append(f"Final result: {imdb_id}")
+            # Copy the movie ID to clipboard
+            clipboard = QApplication.clipboard()
+            clipboard.setText(imdb_id)
+            self.result_display.append("Movie ID copied to clipboard!")
+        else:
+            self.result_display.append("No results found or an error occurred.")
+
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python imdb_search.py <movie/show name> [(year)]")
-        print("Example: python imdb_search.py 'Gen V (2023)'")
+    if "--gui" in sys.argv:
+        app = QApplication(sys.argv)
+        window = IMDbSearchGUI()
+        window.show()
+        sys.exit(app.exec())
+    elif len(sys.argv) < 2:
+        print("Usage: python imdb_search_gui.py <movie/show name> [(year)]")
+        print("       python imdb_search_gui.py --gui")
+        print("Example: python imdb_search_gui.py 'Gen V (2023)'")
         sys.exit(1)
-    
-    query = ' '.join(sys.argv[1:])
-    imdb_id = search_imdb(query)
-    
-    if imdb_id:
-        print(f"Final result: {imdb_id}")
     else:
-        print("No results found or an error occurred.")
+        query = ' '.join(sys.argv[1:])
+        imdb_id = search_imdb(query)
+        
+        if imdb_id:
+            print(f"Final result: {imdb_id}")
+            # Copy the movie ID to clipboard in CLI mode as well
+            if sys.platform == "win32":
+                import subprocess
+                subprocess.run(["clip"], input=imdb_id.encode("utf-16"), check=True)
+                print("Movie ID copied to clipboard!")
+            elif sys.platform == "darwin":
+                import subprocess
+                subprocess.run("pbcopy", input=imdb_id.encode("utf-8"), check=True)
+                print("Movie ID copied to clipboard!")
+            elif sys.platform == "linux":
+                import subprocess
+                subprocess.run(["xclip", "-selection", "clipboard"], input=imdb_id.encode("utf-8"), check=True)
+                print("Movie ID copied to clipboard!")
+            else:
+                print("Clipboard functionality not supported on this platform.")
+        else:
+            print("No results found or an error occurred.")
